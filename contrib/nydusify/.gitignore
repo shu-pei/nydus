@@ -1,0 +1,5 @@
+.vscode
+tmp
+cmd/nydusify
+output
+nydusify-smoke

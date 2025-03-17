@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache Nydus
+        uses: Swatinem/rust-cache@v1
+        with:
+          target-dir: ./target-fusedev
+          cache-on-failure: true
+      - name: Cache Docker Layers
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        # Ignore the failure of a step and avoid terminating the job.
+        continue-on-error: true
+      - name: Smoke Test
+        run: |
+          echo Cargo Home: $CARGO_HOME
+          echo Running User: $(whoami)
+          make docker-smoke
