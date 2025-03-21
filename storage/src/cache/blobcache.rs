@@ -1207,6 +1207,9 @@ impl RafsCache for BlobCache {
 
     /// `offset` indicates the start position within a chunk to start copy. So `usize` type is suitable.
     fn read(&self, bios: &mut [RafsBio], bufs: &[VolatileSlice]) -> Result<usize> {
+        for bio in bios.iter_mut() {
+            println!("Block ID: {}", bio.chunkinfo.block_id());
+        }
         self.metrics.total.inc();
 
         // Try to get rid of effect from prefetch.

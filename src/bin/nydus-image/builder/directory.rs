@@ -149,6 +149,7 @@ impl Builder for DirectoryBuilder {
         )?;
         blob.flush(&mut blob_ctx)?;
 
+        println!("blob size is {}", blob_ctx.compressed_blob_size);
         // Add new blob to blob table
         if blob_ctx.compressed_blob_size > 0 {
             blob_mgr.add(blob_ctx);

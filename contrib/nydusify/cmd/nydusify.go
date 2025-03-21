@@ -24,6 +24,7 @@ import (
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/checker"
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/converter"
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/converter/provider"
+	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/load"
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/metrics"
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/metrics/file_exporter"
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/remote"
@@ -277,6 +278,70 @@ func main() {
 				defer metrics.Export()
 
 				return cvt.Convert(context.Background())
+			},
+		},
+		{
+			Name:  "load",
+			Usage: "load source image to local fs",
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:    "log-level",
+					Value:   "info",
+					Usage:   "Set log level (panic, fatal, error, warn, info, debug, trace)",
+					EnvVars: []string{"LOG_LEVEL"},
+				},
+				&cli.StringSliceFlag{
+					Name:     "sources",
+					Required: true,
+					Usage:    "One or more Nydus image reference(Multiple images should be split by commas)",
+					EnvVars:  []string{"SOURCES"},
+				},
+				&cli.BoolFlag{
+					Name:     "source-insecure",
+					Required: false,
+					Usage:    "Allow http/insecure source registry communication",
+					EnvVars:  []string{"SOURCE_INSECURE"},
+				},
+				&cli.StringFlag{
+					Name:    "work-dir",
+					Value:   "./tmp",
+					Usage:   "Working directory for generating chunkdict image",
+					EnvVars: []string{"WORK_DIR"},
+				},
+				&cli.StringFlag{
+					Name:    "nydus-image",
+					Value:   "nydus-image",
+					Usage:   "Path to the nydus-image binary, default to search in PATH",
+					EnvVars: []string{"NYDUS_IMAGE"},
+				},
+				&cli.StringFlag{
+					Name:  "platform",
+					Value: "linux/" + runtime.GOARCH,
+					Usage: "Specify platform identifier to choose image manifest, possible values: 'linux/amd64' and 'linux/arm64'",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				logLevel, err := logrus.ParseLevel(c.String("log-level"))
+				if err != nil {
+					return err
+				}
+				logrus.SetLevel(logLevel)
+
+				_, arch, err := provider.ExtractOsArch(c.String("platform"))
+				if err != nil {
+					return err
+				}
+				load, err := load.New(load.Opt{
+					Sources:        c.StringSlice("sources"),
+					SourceInsecure: c.Bool("source-insecure"),
+					WorkDir:        c.String("work-dir"),
+					NydusImagePath: c.String("nydus-image"),
+					ExpectedArch:   arch,
+				})
+				if err != nil {
+					return err
+				}
+				return load.Load(context.Background())
 			},
 		},
 		{

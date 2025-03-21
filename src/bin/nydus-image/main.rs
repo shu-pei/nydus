@@ -13,6 +13,7 @@ mod trace;
 
 mod builder;
 mod core;
+mod deduplication;
 mod inspect;
 mod validator;
 
@@ -28,6 +29,7 @@ const BLOB_ID_MAXIMUM_LENGTH: usize = 1024;
 
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg, SubCommand};
+use deduplication::BlobInfo;
 
 use std::fs::metadata;
 use std::fs::OpenOptions;
@@ -47,10 +49,12 @@ use crate::core::context::{
 use crate::core::node::{self, WhiteoutSpec};
 use crate::core::prefetch::Prefetch;
 use crate::core::tree;
+use crate::core::tree::Tree;
 
 use crate::core::chunk_dict::import_chunk_dict;
 use nydus_app::{setup_logging, BuildTimeInfo};
 use nydus_utils::digest;
+use rafs::metadata::{RafsMode, RafsSuper};
 use rafs::RafsIoReader;
 use storage::compress;
 use trace::{EventTracerClass, TimingTracerClass, TraceClass};
@@ -275,6 +279,27 @@ fn main() -> Result<()> {
                     Arg::with_name("blob-dir").help("A directory holding all layers related to a single image")
                         .long("blob-dir").required(false)
                         .takes_value(true)
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("load")
+                .about("load nydus nydus lifecycle")
+                .arg(
+                    Arg::with_name("bootstrap")
+                        .long("bootstrap")
+                        .short("B")
+                        .help("bootstrap path")
+                        .required(true)
+                        .takes_value(true)
+                        .multiple(true),
+                )
+                .arg(
+                    Arg::with_name("target")
+                        .long("target")
+                        .short("T")
+                        .help("target path")
+                        .required(false)
+                        .takes_value(true),
                 )
         )
         .arg(
@@ -530,6 +555,84 @@ fn main() -> Result<()> {
         } else {
             inspect::Prompt::run(inspector);
         }
+    }
+
+    if let Some(matches) = cmd.subcommand_matches("load") {
+        // Safe to unwrap since `bootstrap` has default value.
+        let paths: Vec<PathBuf> = matches
+            .values_of("bootstrap")
+            .unwrap() // Values<'_> 类型
+            .map(PathBuf::from)
+            .collect(); // 收集为 Vec<&Path>
+        println!("Bootstrap paths: {:?}", paths);
+
+        for (_, bootstrap_path) in paths.iter().enumerate() {
+            let path_name = bootstrap_path.as_path();
+
+            // Extract the image name and version name from the bootstrap directory.
+            let bootstrap_dir = match path_name
+                .parent()
+                .and_then(|p| p.file_name().and_then(|f| f.to_str()))
+            {
+                Some(dir_str) => dir_str.to_string(),
+                None => bail!("Invalid Bootstrap directory name"),
+            }; // 获得目录名
+            let full_image_name: Vec<&str> = bootstrap_dir.split(':').collect();
+            let image_name = match full_image_name.get(full_image_name.len() - 2) {
+                Some(&second_last) => second_last.to_string(),
+                None => bail!(
+                    "Invalid image name {:?}",
+                    full_image_name.get(full_image_name.len() - 2)
+                ),
+            }; //获得镜像名
+            let image_tag = match full_image_name.last() {
+                Some(&last) => last.to_string(),
+                None => bail!("Invalid version name {:?}", full_image_name.last()),
+            }; //获得镜像tag
+
+            println!("{:?} {:?}", image_tag, image_name);
+            let mut bootstrap: Option<RafsIoReader> = {
+                Some(Box::new(
+                    OpenOptions::new()
+                        .read(true)
+                        .write(false)
+                        .open(bootstrap_path)
+                        .with_context(|| {
+                            format!("failed to open parent bootstrap file {:?}", bootstrap_path)
+                        })?,
+                ))
+            };
+            let mut rs = RafsSuper {
+                mode: RafsMode::Direct,
+                validate_digest: true,
+                ..Default::default()
+            };
+            let mut blobinfo = BlobInfo::new();
+            rs.load(bootstrap.as_mut().unwrap())
+                .context("failed to load superblock from bootstrap")?;
+
+            blobinfo.from_blob_table(rs.superblock.get_blob_table().as_ref());
+
+            // let mut bootstrap = Bootstrap::new()?;
+            // TODO : 建树 重构 写入
+            Tree::from_bootstrap(&rs, Some(&mut blobinfo.chunk_map))
+                .context("failed to build tree from bootstrap")?;
+            blobinfo.print_blob_ids();
+            blobinfo.print_sizes();
+        }
+        // let mut inspector =
+        //     inspect::RafsInspector::new(bootstrap_path, cmd.is_some()).map_err(|e| {
+        //         error!("Failed to instantiate inspector, {:?}", e);
+        //         e
+        //     })?;
+
+        // if let Some(c) = cmd {
+        //     let o = inspect::Executor::execute(&mut inspector, c.to_string()).unwrap();
+        //     serde_json::to_writer(std::io::stdout(), &o)
+        //         .unwrap_or_else(|e| error!("Failed to serialize, {:?}", e));
+        // } else {
+        //     inspect::Prompt::run(inspector);
+        // }
     }
 
     Ok(())

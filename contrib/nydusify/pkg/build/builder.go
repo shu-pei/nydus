@@ -28,6 +28,11 @@ type BuilderOption struct {
 	AlignedChunk bool
 }
 
+type LoadOption struct {
+	BootstrapPaths    []string
+	LifecycleBlobPath string
+}
+
 type Builder struct {
 	binaryPath string
 	stdout     io.Writer
@@ -95,6 +100,34 @@ func (builder *Builder) Run(option BuilderOption) error {
 
 	io.WriteString(stdin, option.PrefetchDir)
 	stdin.Close()
+
+	if err := cmd.Run(); err != nil {
+		logrus.WithError(err).Errorf("fail to run %v %+v", builder.binaryPath, args)
+		return err
+	}
+
+	return nil
+}
+
+// Generate calls `nydus-image chunkdict generate` to get chunkdict
+func (builder *Builder) Load(option LoadOption) error {
+	logrus.Infof("Invoking 'nydus-image Load' command")
+	args := []string{
+		"load",
+		"--log-level",
+		"warn",
+		"--target",
+		option.LifecycleBlobPath,
+		"--bootstrap",
+	}
+	args = append(args, option.BootstrapPaths...)
+
+	logrus.Debugf("\tCommand: %s %s", builder.binaryPath, strings.Join(args[:], " "))
+
+	cmd := exec.Command(builder.binaryPath, args...)
+	cmd.Stdout = builder.stdout
+	cmd.Stderr = builder.stderr
+	cmd.Stdin = strings.NewReader("")
 
 	if err := cmd.Run(); err != nil {
 		logrus.WithError(err).Errorf("fail to run %v %+v", builder.binaryPath, args)

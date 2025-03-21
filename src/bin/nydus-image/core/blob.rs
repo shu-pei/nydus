@@ -76,7 +76,7 @@ impl Blob {
         if blob_ctx.blob_id.is_empty() {
             blob_ctx.blob_id = format!("{:x}", blob_ctx.blob_hash.clone().finalize());
         }
-
+        println!("chunk_cache size :{:?}", chunk_cache.len());
         Ok(())
     }
 

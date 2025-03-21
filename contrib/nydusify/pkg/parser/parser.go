@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/remote"
 	"github.com/dragonflyoss/image-service/contrib/nydusify/pkg/utils"
@@ -162,6 +164,34 @@ func (parser *Parser) PullNydusBootstrap(ctx context.Context, image *Image) (io.
 		return nil, errors.Wrap(err, "pull Nydus bootstrap layer")
 	}
 	return reader, nil
+}
+
+func (parser *Parser) PullNydusBlob(ctx context.Context, image *Image, path string) error {
+	layers := image.Manifest.Layers
+	for _, layer := range layers {
+		desc := &layer
+		fmt.Printf("%s\n", desc.MediaType)
+		if desc.MediaType == "application/vnd.oci.image.layer.nydus.blob.v1" {
+			reader, err := parser.Remote.Pull(ctx, *desc, true)
+			if err != nil {
+				return errors.Wrap(err, "pull Nydus bootstrap layer")
+			}
+			defer reader.Close()
+
+			outputPath := filepath.Join(path, string(desc.Digest))
+			File, err := os.Create(outputPath)
+			if err != nil {
+				return err
+			}
+			defer File.Close()
+
+			_, err = io.Copy(File, reader)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (p *Parser) matchImagePlatform(desc *ocispec.Descriptor) bool {
