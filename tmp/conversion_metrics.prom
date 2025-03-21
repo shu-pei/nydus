@@ -1,9 +1,0 @@
-# HELP nydusify_convert_convert_duration_key The total duration of converting an OCI image. Broken down by source references/repo and layers count.
-# TYPE nydusify_convert_convert_duration_key counter
-nydusify_convert_convert_duration_key{layers_count="7",source_reference="docker.1ms.run/nginx"} 15.407808692
-# HELP nydusify_convert_convert_success_count_key The total converting success times. Broken down by source references.
-# TYPE nydusify_convert_convert_success_count_key counter
-nydusify_convert_convert_success_count_key{source_reference="docker.1ms.run/nginx"} 1
-# HELP nydusify_convert_store_cache_duration The duration of pushing cache to registry. Broken down by source references.
-# TYPE nydusify_convert_store_cache_duration counter
-nydusify_convert_store_cache_duration{source_reference="docker.1ms.run/nginx"} 6.758e-06
