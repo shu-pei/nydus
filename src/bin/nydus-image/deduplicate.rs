@@ -397,37 +397,40 @@ impl Algorithm<SqliteDatabase> {
         threshold: f64,
     ) -> anyhow::Result<Vec<ChunkdictChunkInfo>> {
         let alpha = 0.5;
+
+        if all_chunks.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let mut smoothed_data = Vec::new();
 
-        let mut last_start_version_index = 0;
-        let mut start_version_index = 0;
-        let mut last_end_version_index = 0;
+        let first_version = all_chunks[0].version.clone();
+        let mut current_version = first_version.clone();
+
+        let mut previous_version_digests: HashSet<String> = HashSet::new();
+        let mut current_version_digests: HashSet<String> = HashSet::new();
 
         for (chunk_index, chunk) in all_chunks.iter().enumerate() {
-            let mut is_duplicate: f64 = 0.0;
-            if chunk.version == all_chunks[0].version {
-                let smoothed_score: f64 = 0.0;
-                smoothed_data.push(smoothed_score);
-            } else {
-                if all_chunks[chunk_index - 1].version != all_chunks[chunk_index].version {
-                    last_start_version_index = start_version_index;
-                    start_version_index = chunk_index;
-                    last_end_version_index = chunk_index - 1;
-                }
-                for last_chunk in all_chunks
-                    .iter()
-                    .take(last_end_version_index + 1)
-                    .skip(last_start_version_index)
-                {
-                    if chunk.chunk_digest == last_chunk.chunk_digest {
-                        is_duplicate = 1.0;
-                        break;
-                    }
-                }
-                let smoothed_score: f64 =
-                    alpha * is_duplicate + (1.0 - alpha) * smoothed_data[chunk_index - 1];
-                smoothed_data.push(smoothed_score);
+            if chunk.version != current_version {
+                previous_version_digests = current_version_digests;
+                current_version_digests = HashSet::new();
+                current_version = chunk.version.clone();
             }
+
+            let smoothed_score = if chunk.version == first_version {
+                0.0
+            } else {
+                let is_duplicate = if previous_version_digests.contains(&chunk.chunk_digest) {
+                    1.0
+                } else {
+                    0.0
+                };
+
+                alpha * is_duplicate + (1.0 - alpha) * smoothed_data[chunk_index - 1]
+            };
+
+            smoothed_data.push(smoothed_score);
+            current_version_digests.insert(chunk.chunk_digest.clone());
         }
 
         let mut chunkdict: Vec<ChunkdictChunkInfo> = Vec::new();
