@@ -589,11 +589,12 @@ impl Algorithm<SqliteDatabase> {
             for j in 0..data_point.len() {
                 let distance =
                     Self::distance(&data_point[i].chunk_list, &data_point[j].chunk_list)?;
-                if !data_point[j].visited && distance <= radius {
+                if distance <= radius {
                     neighbors.push(j);
                 }
             }
             if neighbors.len() < min_points {
+                data_point[i].visited = true;
                 data_point[i].clustered = false;
             } else {
                 Self::expand_cluster(data_point, i, cluster_id, radius, min_points)?;
@@ -624,7 +625,7 @@ impl Algorithm<SqliteDatabase> {
             for j in 0..data_point.len() {
                 let distance =
                     Self::distance(&data_point[q].chunk_list, &data_point[j].chunk_list)?;
-                if !data_point[j].visited && distance <= radius {
+                if distance <= radius {
                     q_neighbors.push(j);
                 }
             }
